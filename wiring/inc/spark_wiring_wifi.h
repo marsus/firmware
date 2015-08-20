@@ -178,6 +178,22 @@ public:
     friend class TCPClient;
     friend class TCPServer;
 
+  /**
+   * Select which network interface to use.
+   * 0 for STA (client interface, default), 1 for AP (soft ap)
+   * @return previous interface or -1 if change could not be actuated
+   */
+  int selectNetworkInterface(int iface);
+
+  /**
+   * Start an access point
+   */
+  bool startAccessPoint(const char* ssid, const char* passwd, int channel);
+
+  /**
+   * Stop a running access point
+   */
+  bool stopAccessPoint();
 };
 
 extern WiFiClass WiFi;

@@ -87,6 +87,7 @@ typedef struct __attribute__((__packed__))  _WLanConfig_t {
 
 typedef int wlan_result_t;
 
+
 /**
  * Connect start the wireless connection.
  */
@@ -226,6 +227,23 @@ int wlan_select_antenna(WLanSelectAntenna_TypeDef antenna);
  * @param called_from_isr - set to true if this is being called from an ISR.
  */
 void wlan_connect_cancel(bool called_from_isr);
+
+/**
+ * Select which network interface to use.
+ * 0 for STA (default), 1 for AP (soft ap)
+ * @return previous interface or -1 if change could not be actuated
+ */
+int wlan_select_interface(int iface);
+
+/**
+ * Start an access point
+ */
+bool wlan_start_ap(const char* ssid, const char* passwd, int channel);
+
+/**
+ * Stop a running access point
+ */
+bool wlan_stop_ap();
 
 #ifdef	__cplusplus
 }

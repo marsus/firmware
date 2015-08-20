@@ -127,6 +127,42 @@ int wlan_has_credentials()
     return !has_credentials;
 }
 
+wiced_interface_t network = WICED_STA_INTERFACE;
+int wlan_select_interface(int iface){
+  int result = network == WICED_AP_INTERFACE ? 1 : 0;
+  switch(iface){
+  case 0:
+    network = WICED_STA_INTERFACE;
+    break;
+  case 1:
+    network = WICED_AP_INTERFACE;
+    break;
+  default:
+    return -1;
+  }
+  // ensure our IP config is up to date
+  extern WLanConfig ip_config;
+  wlan_fetch_ipconfig(&ip_config);
+  return result;
+}
+
+dns_redirector_t dns_redirector;
+extern "C" const wiced_ip_setting_t device_init_ip_settings;
+bool wlan_start_ap(const char* ssid, const char* passwd, int channel){
+  wiced_result_t result;
+  result = wiced_network_up(WICED_AP_INTERFACE, 
+			    WICED_USE_INTERNAL_DHCP_SERVER, 
+			    &device_init_ip_settings );
+  if(result == WICED_SUCCESS)
+    result = wiced_dns_redirector_start( &dns_redirector, WICED_AP_INTERFACE );
+  return result == WICED_SUCCESS;
+}
+
+bool wlan_stop_ap(){
+  wiced_result_t result = wiced_network_down( WICED_AP_INTERFACE );
+  return result == WICED_SUCCESS;
+}
+
 /**
  * Enable wlan and connect to a network.
  * @return 
@@ -143,10 +179,10 @@ int wlan_connect_init()
 wlan_result_t wlan_connect_finalize() 
 {
     // enable connection from stored profiles
-    wlan_result_t result = wiced_interface_up(WICED_STA_INTERFACE);
+    wlan_result_t result = wiced_interface_up(network);
     if (!result) {
         HAL_WLAN_notify_connected();
-        result = wiced_network_up(WICED_STA_INTERFACE, WICED_USE_EXTERNAL_DHCP_SERVER, NULL);
+        result = wiced_network_up(network, WICED_USE_EXTERNAL_DHCP_SERVER, NULL);
     }
     // DHCP happens synchronously
     HAL_WLAN_notify_dhcp(!result);
@@ -166,7 +202,7 @@ wlan_result_t wlan_deactivate() {
 wlan_result_t wlan_disconnect_now() 
 {
     socket_close_all();    
-    wiced_result_t result = wiced_network_down(WICED_STA_INTERFACE);
+    wiced_result_t result = wiced_network_down(network);
     HAL_WLAN_notify_disconnected();    
     return result;
 }
@@ -379,7 +415,7 @@ void wlan_smart_config_cleanup()
 void wlan_setup()
 {    
     if (!wiced_wlan_connectivity_init()) {
-        wiced_network_register_link_callback(HAL_WLAN_notify_connected, HAL_WLAN_notify_disconnected, WICED_STA_INTERFACE);
+        wiced_network_register_link_callback(HAL_WLAN_notify_connected, HAL_WLAN_notify_disconnected, network);
         //wiced_network_suspend();
 }
 }
@@ -395,7 +431,7 @@ inline void setAddress(wiced_ip_address_t* addr, HAL_IPAddress& target) {
 void wlan_fetch_ipconfig(WLanConfig* config) 
 {
     wiced_ip_address_t addr;
-    wiced_interface_t ifup = WICED_STA_INTERFACE;
+    wiced_interface_t ifup = network;
     
     memset(config, 0, sizeof(*config));
     if (wiced_network_is_up(ifup)) {

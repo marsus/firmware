@@ -35,6 +35,7 @@ int inet_gethostbyname(const char* hostname, uint16_t hostnameLen, HAL_IPAddress
     return -result;
 }
 
+extern wiced_interface_t network;
 int inet_ping(const HAL_IPAddress* address, network_interface_t nif, uint8_t nTries, void* reserved) {
     
     const uint32_t     ping_timeout = 1000;
@@ -45,7 +46,7 @@ int inet_ping(const HAL_IPAddress* address, network_interface_t nif, uint8_t nTr
     
     int count = 0;
     for (int i=0; i<nTries; i++) {
-        wiced_result_t     status = wiced_ping(WICED_STA_INTERFACE, &ping_target_ip, ping_timeout, &elapsed_ms);
+        wiced_result_t     status = wiced_ping(network, &ping_target_ip, ping_timeout, &elapsed_ms);
         if (status==WICED_SUCCESS)
             count++;
     }

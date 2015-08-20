@@ -776,13 +776,14 @@ wiced_result_t server_disconnected(wiced_tcp_socket_t* s, void* pv)
     return result;
 }
 
+extern wiced_interface_t network;
 sock_result_t socket_create_tcp_server(uint16_t port, network_interface_t nif)
 {
     socket_t* handle = new socket_t();
     tcp_server_t* server = new tcp_server_t();
     wiced_result_t result = WICED_OUT_OF_HEAP_SPACE;
     if (handle && server) {
-        result = wiced_tcp_server_start(server, WICED_STA_INTERFACE,
+        result = wiced_tcp_server_start(server, network,
             port, WICED_MAXIMUM_NUMBER_OF_SERVER_SOCKETS, server_connected, server_received, server_disconnected, NULL);
     }
     if (result!=WICED_SUCCESS) {
@@ -865,10 +866,10 @@ sock_handle_t socket_create(uint8_t family, uint8_t type, uint8_t protocol, uint
         wiced_result_t wiced_result;
         socket->set_type((protocol==IPPROTO_UDP ? socket_t::UDP : socket_t::TCP));
         if (protocol==IPPROTO_TCP) {
-            wiced_result = wiced_tcp_create_socket(tcp(socket), WICED_STA_INTERFACE);
+            wiced_result = wiced_tcp_create_socket(tcp(socket), network);
         }
         else {
-            wiced_result = wiced_udp_create_socket(udp(socket), port, WICED_STA_INTERFACE);
+            wiced_result = wiced_udp_create_socket(udp(socket), port, network);
         }
         if (wiced_result!=WICED_SUCCESS) {
             socket->set_type(socket_t::NONE);
