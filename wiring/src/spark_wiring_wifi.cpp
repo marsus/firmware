@@ -84,8 +84,8 @@ the same way.
     WiFiClass WiFi;
     NetworkClass& Network = WiFi;
 
-  bool WiFiClass::startAccessPoint(const char* ssid, const char* passwd, int channel){
-    return wlan_start_ap(ssid, passwd, channel) == 0;
+  bool WiFiClass::startAccessPoint(){
+    return wlan_start_ap() == 0;
   }
 
   bool WiFiClass::stopAccessPoint(){

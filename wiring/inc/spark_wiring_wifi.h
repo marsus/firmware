@@ -180,15 +180,20 @@ public:
 
   /**
    * Select which network interface to use.
-   * 0 for STA (client interface, default), 1 for AP (soft ap)
+   * @param iface 0 for STA (default), 1 for AP (soft ap), -1 to simply return current network
    * @return previous interface or -1 if change could not be actuated
    */
   int selectNetworkInterface(int iface);
 
   /**
-   * Start an access point
+   * set access point configuration
    */
-  bool startAccessPoint(const char* ssid, const char* passwd, int channel);
+  bool configureAccessPoint(const char* ssid, const char* passwd, int channel);
+
+  /**
+   * Start a previously configured access point
+   */
+  bool startAccessPoint();
 
   /**
    * Stop a running access point

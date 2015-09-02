@@ -137,6 +137,8 @@ int wlan_select_interface(int iface){
   case 1:
     network = WICED_AP_INTERFACE;
     break;
+  case -1:
+    return result;
   default:
     return -1;
   }
@@ -148,18 +150,19 @@ int wlan_select_interface(int iface){
 
 dns_redirector_t dns_redirector;
 extern "C" const wiced_ip_setting_t device_init_ip_settings;
-bool wlan_start_ap(const char* ssid, const char* passwd, int channel){
+bool wlan_start_ap(){
   wiced_result_t result;
   result = wiced_network_up(WICED_AP_INTERFACE, 
 			    WICED_USE_INTERNAL_DHCP_SERVER, 
 			    &device_init_ip_settings );
   if(result == WICED_SUCCESS)
-    result = wiced_dns_redirector_start( &dns_redirector, WICED_AP_INTERFACE );
+    result = wiced_dns_redirector_start(&dns_redirector, WICED_AP_INTERFACE);
   return result == WICED_SUCCESS;
 }
 
 bool wlan_stop_ap(){
-  wiced_result_t result = wiced_network_down( WICED_AP_INTERFACE );
+  wiced_dns_redirector_stop(&dns_redirector);
+  wiced_result_t result = wiced_network_down(WICED_AP_INTERFACE);
   return result == WICED_SUCCESS;
 }
 

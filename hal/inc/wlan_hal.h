@@ -230,18 +230,18 @@ void wlan_connect_cancel(bool called_from_isr);
 
 /**
  * Select which network interface to use.
- * 0 for STA (default), 1 for AP (soft ap)
+ * @param iface 0 for STA (default), 1 for AP (soft ap), -1 to simply return current network
  * @return previous interface or -1 if change could not be actuated
  */
 int wlan_select_interface(int iface);
 
 /**
- * Start an access point
+ * Start the access point
  */
-bool wlan_start_ap(const char* ssid, const char* passwd, int channel);
+bool wlan_start_ap();
 
 /**
- * Stop a running access point
+ * Stop the access point
  */
 bool wlan_stop_ap();
 
