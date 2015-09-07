@@ -307,15 +307,12 @@ int Spark_Receive(unsigned char *buf, uint32_t buflen)
     }
 
     static int spark_receive_last_bytes_received = 0;
-    static volatile system_tick_t spark_receive_last_request_millis = 0;
+//    static volatile system_tick_t spark_receive_last_request_millis = 0;
     //no delay between successive socket_receive() calls for cloud
     //not connected or ota flash in process or on last data receipt
-    if ((SPARK_CLOUD_CONNECTED != 1) || (SPARK_FLASH_UPDATE == 1)
-        || (&spark_receive_last_bytes_received > 0)
-        || ((millis() - spark_receive_last_request_millis) > SPARK_RECEIVE_DELAY_MILLIS))
     {
         spark_receive_last_bytes_received = socket_receive(sparkSocket, buf, buflen, 0);
-        spark_receive_last_request_millis = millis();
+        //spark_receive_last_request_millis = millis();
     }
 
     return spark_receive_last_bytes_received;
@@ -436,7 +433,7 @@ void Spark_Protocol_Init(void)
         HAL_device_ID(id, id_length);
         spark_protocol_init(sp, (const char*) id, keys, callbacks, descriptor);
 
-        Spark.subscribe("spark", SystemEvents);
+        Particle.subscribe("spark", SystemEvents);
     }
 }
 
@@ -455,18 +452,18 @@ int Spark_Handshake(void)
         char buf[CLAIM_CODE_SIZE + 1];
         if (!HAL_Get_Claim_Code(buf, sizeof (buf)) && *buf)
         {
-            Spark.publish("spark/device/claim/code", buf, 60, PRIVATE);
+            Particle.publish("spark/device/claim/code", buf, 60, PRIVATE);
         }
 
         ultoa(HAL_OTA_FlashLength(), buf, 10);
-        Spark.publish("spark/hardware/max_binary", buf, 60, PRIVATE);
+        Particle.publish("spark/hardware/max_binary", buf, 60, PRIVATE);
 
         ultoa(HAL_OTA_ChunkSize(), buf, 10);
-        Spark.publish("spark/hardware/ota_chunk_size", buf, 60, PRIVATE);
+        Particle.publish("spark/hardware/ota_chunk_size", buf, 60, PRIVATE);
 
         if (!HAL_core_subsystem_version(buf, sizeof (buf)))
         {
-            Spark.publish("spark/" SPARK_SUBSYSTEM_EVENT_NAME, buf, 60, PRIVATE);
+            Particle.publish("spark/" SPARK_SUBSYSTEM_EVENT_NAME, buf, 60, PRIVATE);
         }
 
         Multicast_Presence_Announcement();
@@ -602,6 +599,7 @@ int Spark_Connect(void)
 
     bool ip_resolve_failed = false;
     IPAddress ip_addr;
+    int rv = -1;
 
     switch (server_addr.addr_type)
     {
@@ -622,13 +620,12 @@ int Spark_Connect(void)
             int attempts = 3;
             while (!ip_addr && 0 < --attempts)
             {
-                inet_gethostbyname(server_addr.domain, strnlen(server_addr.domain, 126), &ip_addr.raw(), NIF_DEFAULT, NULL);
+                rv = inet_gethostbyname(server_addr.domain, strnlen(server_addr.domain, 126), &ip_addr.raw(), NIF_DEFAULT, NULL);
                 HAL_Delay_Milliseconds(1);
             }
-            ip_resolve_failed = !ip_addr;
+            ip_resolve_failed = rv;
     }
 
-    int rv = -1;
     if (!ip_resolve_failed)
     {
         if (!ip_addr)

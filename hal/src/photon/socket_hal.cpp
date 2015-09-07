@@ -281,6 +281,7 @@ struct tcp_server_t : public wiced_tcp_server_t
      * @return
      */
     wiced_result_t disconnect(wiced_tcp_socket_t* socket) {
+        wiced_tcp_disconnect(socket);
         wiced_result_t result = wiced_tcp_server_disconnect_socket(this, socket);
         return result;
     }
@@ -446,16 +447,30 @@ void add_list(socket_t* item, socket_t*& list) {
     list = item;
 }
 
+bool exists_list(socket_t* item, socket_t* list)
+{
+    bool exists = false;
+    while (list) {
+        if (item==list) {
+            exists = true;
+            break;
+        }
+        list = list->next;
+    }
+    return exists;
+}
+
 /**
  * Removes an item from the linked list.
  * @param item
  * @param list
  */
-
-void remove_list(socket_t* item, socket_t*& list)
+bool remove_list(socket_t* item, socket_t*& list)
 {
+    bool removed = false;
     if (list==item) {
         list = item->next;
+        removed = true;
     }
     else
     {
@@ -463,12 +478,13 @@ void remove_list(socket_t* item, socket_t*& list)
         while (current) {
             if (current->next==item) {
                 current->next = item->next;
+                removed = true;
                 break;
             }
         }
     }
+    return removed;
 }
-
 
 socket_t*& list_for_socket(socket_t* socket) {
     return (socket->get_type()==socket_t::TCP_SERVER) ? servers : clients;
@@ -480,9 +496,17 @@ void add(socket_t* socket) {
     }
 }
 
+/**
+ * Determines if the given socket still exists in the list of current sockets.
+ */
+bool exists(socket_t* socket) {
+    return socket && exists_list(socket, list_for_socket(socket));
+}
+
 void remove(socket_t* socket) {
     if (socket) {
-        remove_list(socket, list_for_socket(socket));
+        if (remove_list(socket, list_for_socket(socket)))
+            delete socket;
     }
 }
 
@@ -498,14 +522,14 @@ inline tcp_server_t* server(socket_t* socket) { return is_server(socket) ? socke
 
 wiced_result_t socket_t::notify_disconnected(wiced_tcp_socket_t*, void* socket) {
     if (socket) {
-        tcp_socket_t* tcp_socket = tcp((socket_t*)socket);
-         if (tcp_socket)
-             tcp_socket->notify_disconnected();
+        if (exists((socket_t*)socket)) {
+            tcp_socket_t* tcp_socket = tcp((socket_t*)socket);
+            if (tcp_socket)
+                tcp_socket->notify_disconnected();
+        }
     }
     return WICED_SUCCESS;
 }
-
-
 
 wiced_tcp_socket_t* as_wiced_tcp_socket(socket_t* socket)
 {
@@ -553,34 +577,20 @@ socket_t* from_handle(sock_handle_t handle) {
  */
 sock_handle_t socket_dispose(sock_handle_t handle) {
     if (socket_handle_valid(handle)) {
-        from_handle(handle)->dispose();
+        remove(from_handle(handle));
     }
     return SOCKET_INVALID;
 }
 
-
-// todo - this doesn't free up memory used by each socket_t instance
 void close_all_list(socket_t*& list)
 {
     socket_t* current = list;
     while (current) {
-        current->close();
-        current = current->next;
-    }
-}
-
-void remove_disposed_list(socket_t*& list)
-{
-    socket_t* current = list;
-    while (current) {
         socket_t* next = current->next;
-        if (current->get_type()==socket_t::NONE)
-        {
-            delete current;
-        }
+        delete current;
         current = next;
     }
-    list = NULL;    // clear the list.
+    list = NULL;
 }
 
 void socket_close_all()
@@ -613,23 +623,27 @@ sock_result_t as_sock_result(socket_t* socket)
  */
 sock_result_t socket_connect(sock_handle_t sd, const sockaddr_t *addr, long addrlen)
 {
-    sock_result_t result = SOCKET_INVALID;
+    wiced_result_t result = WICED_INVALID_SOCKET;
     socket_t* socket = from_handle(sd);
     tcp_socket_t* tcp_socket = tcp(socket);
     if (tcp_socket) {
-        wiced_result_t wiced_result = wiced_tcp_bind(tcp_socket, WICED_ANY_PORT);
-        if (wiced_result==WICED_SUCCESS) {
+        result = wiced_tcp_bind(tcp_socket, WICED_ANY_PORT);
+        if (result==WICED_SUCCESS) {
             //wiced_tcp_register_callbacks(tcp(socket), socket_t::notify_connected, socket_t::notify_received, socket_t::notify_disconnected, (void*)socket);
             SOCKADDR_TO_PORT_AND_IPADDR(addr, addr_data, port, ip_addr);
             unsigned timeout = 5*1000;
             result = wiced_tcp_connect(tcp_socket, &ip_addr, port, timeout);
-            if (result==WICED_SUCCESS)
+            if (result==WICED_SUCCESS) {
                 tcp_socket->connected();
+            } else {
+              // Work around WICED bug that doesn't set connection handler to NULL after deleting
+              // it, leading to deleting the same memory twice and a crash
+              // WICED/network/LwIP/WICED/tcpip.c:920
+              tcp_socket->conn_handler = NULL;
+            }
         }
-        if (result!=WICED_SUCCESS)
-            result = as_sock_result(wiced_result);
     }
-    return result;
+    return as_sock_result(result);
 }
 
 /**
@@ -841,7 +855,6 @@ sock_result_t socket_close(sock_handle_t sock)
     sock_result_t result = WICED_SUCCESS;
     socket_t* socket = from_handle(sock);
     if (socket) {
-        socket->close();
         socket_dispose(sock);
         DEBUG("socket closed %x", int(sock));
     }
@@ -873,7 +886,7 @@ sock_handle_t socket_create(uint8_t family, uint8_t type, uint8_t protocol, uint
         }
         if (wiced_result!=WICED_SUCCESS) {
             socket->set_type(socket_t::NONE);
-            socket_dispose(result);
+            delete socket;
             result = as_sock_result(wiced_result);
         }
         else {
@@ -927,9 +940,11 @@ sock_result_t socket_sendto(sock_handle_t sd, const void* buffer, socklen_t len,
             /* Set the end of the data portion */
             wiced_packet_set_data_end(packet, (uint8_t*) data + size);
             result = wiced_udp_send(udp(socket), &ip_addr, port, packet);
+            len = size;
         }
     }
-    return as_sock_result(result);
+    // return negative value on error, or length if successful.
+    return result ? -result : len;
 }
 
 sock_result_t socket_receivefrom(sock_handle_t sd, void* buffer, socklen_t bufLen, uint32_t flags, sockaddr_t* addr, socklen_t* addrsize)
