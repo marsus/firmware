@@ -450,13 +450,8 @@ inline void setAddress(wiced_ip_address_t* addr, HAL_IPAddress& target) {
 void wlan_fetch_ipconfig(WLanConfig* config)
 {
     wiced_ip_address_t addr;
-<<<<<<< HEAD
     wiced_interface_t ifup = network;
-    
-=======
-    wiced_interface_t ifup = WICED_STA_INTERFACE;
 
->>>>>>> 031f1b3186069e631ceab1b8967c44ef17b1525d
     memset(config, 0, sizeof(*config));
     if (wiced_network_is_up(ifup)) {
 
