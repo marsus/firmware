@@ -43,6 +43,7 @@
 #include "wwd_wifi.h"
 #include "wwd_debug.h"
 #include "wiced_rtos.h"
+//#include "network_interface.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -679,12 +680,14 @@ static inline wiced_result_t wiced_wifi_get_roam_trigger( int32_t* trigger_level
 
 static inline wiced_result_t wiced_wifi_get_channel( uint32_t* channel )
 {
-    return (wiced_result_t) wwd_wifi_get_channel(WWD_STA_INTERFACE, channel);
+  extern wiced_interface_t current_network_if;
+  return (wiced_result_t) wwd_wifi_get_channel((wwd_interface_t)current_network_if, channel);
 }
 
 static inline wiced_result_t wiced_wifi_get_mac_address( wiced_mac_t* mac )
 {
-    return (wiced_result_t) wwd_wifi_get_mac_address( mac, WWD_STA_INTERFACE );
+  extern wiced_interface_t current_network_if;
+  return (wiced_result_t) wwd_wifi_get_mac_address( mac, (wwd_interface_t)current_network_if );
 }
 
 static inline wiced_result_t wiced_wifi_get_counters(wwd_interface_t interface, wiced_counters_t* counters )

@@ -110,12 +110,12 @@ the same way.
     WiFiClass WiFi;
     NetworkClass& Network = WiFi;
 
-  bool WiFiClass::startAccessPoint(){
-    return wlan_start_ap() == 0;
+  bool WiFiClass::startDNS(){
+    return wlan_start_dns() == 0;
   }
 
-  bool WiFiClass::stopAccessPoint(){
-    return wlan_stop_ap() == 0;
+  bool WiFiClass::stopDNS(){
+    return wlan_stop_dns() == 0;
   }
 
   int WiFiClass::selectNetworkInterface(int iface){
