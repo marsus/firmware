@@ -30,7 +30,9 @@
 #define String_class_h
 #ifdef __cplusplus
 
+#include <stdarg.h>
 #include "spark_wiring_print.h" // for HEX, DEC ... constants
+#include "spark_wiring_printable.h"
 
 // When compiling programs with this class, the following gcc parameters
 // dramatically increase performance and memory (RAM) efficiency, typically
@@ -62,6 +64,7 @@ public:
 	// be false).
 	String(const char *cstr = "");
 	String(const String &str);
+        String(const Printable& printable);
 	#ifdef __GXX_EXPERIMENTAL_CXX0X__
 	String(String &&rval);
 	String(StringSumHelper &&rval);
@@ -174,17 +177,19 @@ public:
 	String substring( unsigned int beginIndex, unsigned int endIndex ) const;
 
 	// modification
-	void replace(char find, char replace);
-	void replace(const String& find, const String& replace);
-	void remove(unsigned int index);
-	void remove(unsigned int index, unsigned int count);
-	void toLowerCase(void);
-	void toUpperCase(void);
-	void trim(void);
+	String& replace(char find, char replace);
+	String& replace(const String& find, const String& replace);
+	String& remove(unsigned int index);
+	String& remove(unsigned int index, unsigned int count);
+	String& toLowerCase(void);
+	String& toUpperCase(void);
+	String& trim(void);
 
 	// parsing/conversion
 	long toInt(void) const;
 	float toFloat(void) const;
+
+        static String format(const char* format, ...);
 
 protected:
 	char *buffer;	        // the actual char array
@@ -202,6 +207,9 @@ protected:
 	#ifdef __GXX_EXPERIMENTAL_CXX0X__
 	void move(String &rhs);
 	#endif
+
+        friend class StringPrintableHelper;
+
 };
 
 class StringSumHelper : public String
@@ -216,6 +224,9 @@ public:
 	StringSumHelper(long num) : String(num) {}
 	StringSumHelper(unsigned long num) : String(num) {}
 };
+
+#include <ostream>
+std::ostream& operator << ( std::ostream& os, const String& value );
 
 
 #endif  // __cplusplus

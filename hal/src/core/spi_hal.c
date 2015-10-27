@@ -53,6 +53,9 @@ void HAL_SPI_Init(HAL_SPI_Interface spi)
 
 void HAL_SPI_Begin(HAL_SPI_Interface spi, uint16_t pin)
 {
+    if (pin==SPI_DEFAULT_SS)
+        pin = SS;
+
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_SPI1, ENABLE);
 
   HAL_Pin_Mode(SCK, AF_OUTPUT_PUSHPULL);
@@ -186,4 +189,9 @@ void HAL_SPI_DMA_Transfer(HAL_SPI_Interface spi, void* tx_buffer, void* rx_buffe
 bool HAL_SPI_Is_Enabled(HAL_SPI_Interface spi)
 {
   return SPI_Enabled;
+}
+
+void HAL_SPI_Info(HAL_SPI_Interface spi, hal_spi_info_t* info, void* reserved)
+{
+    info->system_clock = 36000000;
 }

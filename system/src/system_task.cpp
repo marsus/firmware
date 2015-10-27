@@ -1,11 +1,4 @@
 /**
- ******************************************************************************
- * @file    spark_wiring_wlan.cpp
- * @author  Satish Nair and Zachary Crockett
- * @version V1.0.0
- * @date    13-March-2013
- * @brief
- ******************************************************************************
   Copyright (c) 2013-2015 Particle Industries, Inc.  All rights reserved.
 
   This library is free software; you can redistribute it and/or
@@ -22,10 +15,12 @@
   License along with this library; if not, see <http://www.gnu.org/licenses/>.
  ******************************************************************************
  */
+
 #include "spark_wiring_system.h"
 #include "spark_wiring_usbserial.h"
 #include "system_task.h"
 #include "system_cloud.h"
+#include "system_cloud_internal.h"
 #include "system_mode.h"
 #include "system_network.h"
 #include "system_network_internal.h"
@@ -41,12 +36,11 @@
 #include "spark_wiring_network.h"
 #include "spark_wiring_constants.h"
 #include "spark_wiring_cloud.h"
+#include "system_threading.h"
 
 using spark::Network;
 
 volatile system_tick_t spark_loop_total_millis = 0;
-
-void (*announce_presence)(void);
 
 // Auth options are WLAN_SEC_UNSEC, WLAN_SEC_WPA, WLAN_SEC_WEP, and WLAN_SEC_WPA2
 unsigned char _auth = WLAN_SEC_WPA2;
@@ -57,17 +51,15 @@ volatile uint8_t SPARK_LED_FADE = 1;
 
 volatile uint8_t Spark_Error_Count;
 
-void SPARK_WLAN_Setup(void (*presence_announcement_callback)(void))
+void Network_Setup(bool threaded)
 {
-    announce_presence = presence_announcement_callback;
+#if !PARTICLE_NO_NETWORK
+    network.setup();
 
-#if !SPARK_NO_WIFI
-    wlan_setup();
-
-    /* Trigger a WLAN device */
-    if (system_mode() == AUTOMATIC || system_mode()==SAFE_MODE)
+    // don't automatically connect when threaded since we want the thread to start asap
+    if ((!threaded && system_mode() == AUTOMATIC) || system_mode()==SAFE_MODE)
     {
-        network_connect(Network, 0, 0, NULL);
+        network.connect();
     }
 #endif
 
@@ -101,24 +93,21 @@ void manage_network_connection()
         {
             DEBUG("Resetting WLAN!");
             auto was_sleeping = SPARK_WLAN_SLEEP;
+            auto was_disconnected = network.manual_disconnect();
             cloud_disconnect();
-            network_off(Network, 0, 0, NULL);
+            network.off();
             CLR_WLAN_WD();
             SPARK_WLAN_RESET = 0;
-            SPARK_WLAN_STARTED = 0;
             SPARK_WLAN_SLEEP = was_sleeping;
+            network.set_manual_disconnect(was_disconnected);
             cfod_count = 0;
         }
     }
     else
     {
-        if (!SPARK_WLAN_STARTED || (SPARK_CLOUD_CONNECT && !WLAN_CONNECTED))
+        if (!SPARK_WLAN_STARTED || (SPARK_CLOUD_CONNECT && !network.connected()))
         {
-            if (!WLAN_DISCONNECT)
-            {
-                ARM_WLAN_WD(CONNECT_TO_ADDRESS_MAX);
-            }
-            network_connect(Network, 0, 0, NULL);
+            network.connect();
         }
     }
 }
@@ -150,7 +139,8 @@ inline uint8_t in_cloud_backoff_period()
 
 void handle_cloud_errors()
 {
-    LED_SetRGBColor(RGB_COLOR_RED);
+    // cfod resets in orange since they are soft errors
+    LED_SetRGBColor(Spark_Error_Count > 1 ? RGB_COLOR_ORANGE : RGB_COLOR_RED);
 
     while (Spark_Error_Count != 0)
     {
@@ -164,7 +154,7 @@ void handle_cloud_errors()
     // TODO Send the Error Count to Cloud: NVMEM_Spark_File_Data[ERROR_COUNT_FILE_OFFSET]
 
     // Reset Error Count
-    wlan_set_error_count(0);
+    network.set_error_count(0);
 }
 
 void handle_cfod()
@@ -204,7 +194,7 @@ void handle_cfod()
 
 void establish_cloud_connection()
 {
-    if (WLAN_DHCP && !SPARK_WLAN_SLEEP && !SPARK_CLOUD_SOCKETED)
+    if (network.ready() && !SPARK_WLAN_SLEEP && !SPARK_CLOUD_SOCKETED)
     {
         if (Spark_Error_Count)
             handle_cloud_errors();
@@ -222,13 +212,13 @@ void establish_cloud_connection()
         }
         else
         {
-            cloud_connection_failed();
             SPARK_CLOUD_SOCKETED = 0;
-#if PLATFORM_ID<3
-            if (!SPARK_WLAN_RESET)
-                handle_cfod();
-#endif
-            wlan_set_error_count(Spark_Error_Count);
+            if (SPARK_WLAN_RESET)
+                return;
+
+            cloud_connection_failed();
+            handle_cfod();
+            network.set_error_count(Spark_Error_Count);
         }
     }
 }
@@ -268,10 +258,9 @@ void handle_cloud_connection(bool force_events)
                 // the socket may quickly disconnect and the connection retried, turning
                 // the LED back to cyan
                 system_tick_t start = HAL_Timer_Get_Milli_Seconds();
-                Spark_Disconnect(); // clean up the socket
+                // allow time for the LED to be flashed
                 while ((HAL_Timer_Get_Milli_Seconds()-start)<250);
-                SPARK_CLOUD_SOCKETED = 0;
-
+                cloud_disconnect();
             }
             else
             {
@@ -320,36 +309,47 @@ void Spark_Idle_Events(bool force_events/*=false*/)
     CLOUD_FN(manage_cloud_connection(force_events), (void)0);
 }
 
-
 /*
  * @brief This should block for a certain number of milliseconds and also execute spark_wlan_loop
  */
-void system_delay_ms(unsigned long ms)
+void system_delay_ms_non_threaded(unsigned long ms, bool force_no_background_loop=false)
 {
-    volatile system_tick_t spark_loop_elapsed_millis = SPARK_LOOP_DELAY_MILLIS;
+    if (ms==0) return;
+
+    system_tick_t spark_loop_elapsed_millis = SPARK_LOOP_DELAY_MILLIS;
     spark_loop_total_millis += ms;
 
-    volatile system_tick_t last_millis = HAL_Timer_Get_Milli_Seconds();
+    system_tick_t start_millis = HAL_Timer_Get_Milli_Seconds();
+    system_tick_t end_micros = HAL_Timer_Get_Micro_Seconds() + (1000*ms);
 
     while (1)
     {
         HAL_Notify_WDT();
 
-        volatile system_tick_t current_millis = HAL_Timer_Get_Milli_Seconds();
-        volatile system_tick_t elapsed_millis = current_millis - last_millis;
+        system_tick_t elapsed_millis = HAL_Timer_Get_Milli_Seconds() - start_millis;
 
-        //Check for wrapping
-        if (elapsed_millis >= 0x80000000)
-        {
-            elapsed_millis = last_millis + current_millis;
-        }
-
-        if (elapsed_millis >= ms)
+        if (elapsed_millis > ms)
         {
             break;
         }
+        else if (elapsed_millis >= (ms-1)) {
+            // on the last millisecond, resolve using millis - we don't know how far in that millisecond had come
+            // have to be careful with wrap around since start_micros can be greater than end_micros.
 
-        if (SPARK_WLAN_SLEEP)
+            for (;;)
+            {
+                system_tick_t delay = end_micros-HAL_Timer_Get_Micro_Seconds();
+                if (delay>100000)
+                    return;
+                HAL_Delay_Microseconds(min(delay/2, 1u));
+            }
+        }
+        else
+        {
+            HAL_Delay_Milliseconds(1);
+        }
+
+        if (SPARK_WLAN_SLEEP || force_no_background_loop)
         {
             //Do not yield for Spark_Idle()
         }
@@ -367,23 +367,39 @@ void system_delay_ms(unsigned long ms)
     }
 }
 
-void cloud_disconnect()
+void system_delay_ms(unsigned long ms, bool force_no_background_loop=false)
+{
+    if (system_thread_get_state(NULL) == spark::feature::DISABLED &&
+        APPLICATION_THREAD_CURRENT()) {
+        system_delay_ms_non_threaded(ms, force_no_background_loop);
+    }
+    else
+    {
+        HAL_Delay_Milliseconds(ms);
+    }
+}
+
+
+void cloud_disconnect(bool closeSocket)
 {
 #ifndef SPARK_NO_CLOUD
+
     if (SPARK_CLOUD_SOCKETED || SPARK_CLOUD_CONNECTED)
     {
-        Spark_Disconnect();
+        if (closeSocket)
+            Spark_Disconnect();
 
         SPARK_FLASH_UPDATE = 0;
         SPARK_CLOUD_CONNECTED = 0;
         SPARK_CLOUD_SOCKETED = 0;
-        Spark_Error_Count = 0;
 
-        if (!WLAN_DISCONNECT && !WLAN_SMART_CONFIG_START)
+        if (!network.manual_disconnect() && !network.listening())
         {
             LED_SetRGBColor(RGB_COLOR_GREEN);
             LED_On(LED_RGB);
         }
     }
+    Spark_Error_Count = 0;  // this is also used for CFOD/WiFi reset, and blocks the LED when set.
+
 #endif
 }

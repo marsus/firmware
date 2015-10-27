@@ -30,6 +30,9 @@
 #include "hw_config.h"
 #include "rgbled.h"
 
+void platform_startup();
+
+
 /* Private typedef -----------------------------------------------------------*/
 typedef  void (*pFunction)(void);
 
@@ -113,6 +116,8 @@ int main(void)
     // Setup SysTick Timer for 1 msec interrupts to call Timing_Decrement()
     SysTick_Configuration();
 
+    platform_startup();
+
     USE_SYSTEM_FLAGS = 1;
 
     //--------------------------------------------------------------------------
@@ -136,6 +141,12 @@ int main(void)
     if (SYSTEM_FLAG(StartupMode_SysFlag) != 0) {
         SYSTEM_FLAG(StartupMode_SysFlag) = 0;
         Save_SystemFlags();
+    }
+
+    uint8_t features = SYSTEM_FLAG(FeaturesEnabled_SysFlag);
+    // disabling this until we can be sure DCT corruption won't bite.
+    if (true || (features!=0xFF && (((~(features>>4)&0xF)) != (features & 0xF))) || (features&8)) {     // bit 3 must be reset for this to be enabled
+        features = 0xFF;        // ignore - corrupt. Top 4 bits should be the inverse of the bottom 4
     }
 
     //--------------------------------------------------------------------------
@@ -183,6 +194,11 @@ int main(void)
         {
             USB_DFU_MODE = 1;
             //Subsequent system reset or power on-off should execute normal firmware
+            HAL_Core_Write_Backup_Register(BKP_DR_01, 0xFFFF);
+        }
+        else if (BKP_DR1_Value == ENTER_SAFE_MODE_APP_REQUEST)
+        {
+            SAFE_MODE = 1;
             HAL_Core_Write_Backup_Register(BKP_DR_01, 0xFFFF);
         }
         // Else check if the system has resumed from IWDG reset
@@ -242,17 +258,18 @@ int main(void)
         HAL_Core_Write_Backup_Register(BKP_DR_01, BKP_DR1_Value);
     }
 
-
     //--------------------------------------------------------------------------
     //    Check if BUTTON1 is pressed and determine the status
     //--------------------------------------------------------------------------
-    if (BUTTON_GetState(BUTTON1) == BUTTON1_PRESSED)
+    if (BUTTON_GetState(BUTTON1) == BUTTON1_PRESSED && (features & BL_BUTTON_FEATURES))
     {
 #define TIMING_SAFE_MODE 1000
 #define TIMING_DFU_MODE 3000
 #define TIMING_RESTORE_MODE 6500
 #define TIMING_RESET_MODE 10000
 #define TIMING_ALL 12000            // add a couple of seconds for visual feedback
+
+        bool factory_reset_available = (features & BL_FEATURE_FACTORY_RESET) && FLASH_IsFactoryResetAvailable();
 
         TimingBUTTON = TIMING_ALL;
         uint8_t factory_reset = 0;
@@ -267,7 +284,7 @@ int main(void)
             }
             else if(!factory_reset && TimingBUTTON <= (TIMING_ALL-TIMING_RESTORE_MODE))
             {
-                // if pressed for > 6.5 sec, enter Safe mode
+                // if pressed for > 6.5 sec, enter firmware reset
                 LED_SetRGBColor(RGB_COLOR_GREEN);
                 SYSTEM_FLAG(NVMEM_SPARK_Reset_SysFlag) = 0x0000;
                 factory_reset = 1;
@@ -275,17 +292,24 @@ int main(void)
             else if(!USB_DFU_MODE && TimingBUTTON <= (TIMING_ALL-TIMING_DFU_MODE))
             {
                 // if pressed for > 3 sec, enter USB DFU Mode
-                LED_SetRGBColor(RGB_COLOR_YELLOW);
-                OTA_FLASH_AVAILABLE = 0;
-                REFLASH_FROM_BACKUP = 0;
-                FACTORY_RESET_MODE = 0;
-                USB_DFU_MODE = 1;           // stay in DFU mode until the button is released so we have slow-led blinking
+                if (features&BL_FEATURE_DFU_MODE) {
+                    LED_SetRGBColor(RGB_COLOR_YELLOW);
+                    USB_DFU_MODE = 1;           // stay in DFU mode until the button is released so we have slow-led blinking
+                }
+                if (!factory_reset_available)
+                    break;
             }
             else if(!SAFE_MODE && TimingBUTTON <= TIMING_ALL-TIMING_SAFE_MODE)
             {
-                // if pressed for > 1 sec, enter Safe Mode
-                LED_SetRGBColor(RGB_COLOR_MAGENTA);
-                SAFE_MODE = 1;
+                OTA_FLASH_AVAILABLE = 0;
+                REFLASH_FROM_BACKUP = 0;
+                FACTORY_RESET_MODE = 0;
+
+                if (features&BL_FEATURE_SAFE_MODE) {
+                    // if pressed for > 1 sec, enter Safe Mode
+                    LED_SetRGBColor(RGB_COLOR_MAGENTA);
+                    SAFE_MODE = 1;
+                }
             }
         }
 
@@ -356,7 +380,7 @@ int main(void)
 
         // ToDo add CRC check
         // Test if user code is programmed starting from ApplicationAddress
-            if (is_application_valid(ApplicationAddress))
+        if (is_application_valid(ApplicationAddress))
         {
             // Jump to user application
             JumpAddress = *(__IO uint32_t*) (ApplicationAddress + 4);
@@ -398,6 +422,8 @@ int main(void)
     }
 }
 
+extern void DFU_Check_Reset();
+
 /*******************************************************************************
  * Function Name  : Timing_Decrement
  * Description    : Decrements the various Timing variables related to SysTick.
@@ -427,6 +453,8 @@ void Timing_Decrement(void)
         LED_Toggle(LED_RGB);
         TimingLED = 100;
     }
+
+    DFU_Check_Reset();
 }
 
 #ifdef USE_FULL_ASSERT

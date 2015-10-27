@@ -16,14 +16,34 @@ extern "C" {
 typedef enum hal_irq_t {
 #if defined(STM32F10X_MD) || defined(STM32F10X_HD)
     __All_irq = 0,
-    SysInterrupt_SysTick = 1,
-    SysInterrupt_TIM1_CC = 2,
-    SysInterrupt_TIM2,
-    SysInterrupt_TIM3,
-    SysInterrupt_TIM4,
-    __Last_irq = 6
-
-
+    SysInterrupt_SysTick,
+    SysInterrupt_TIM1_CC_IRQ,
+    SysInterrupt_TIM1_Compare1,
+    SysInterrupt_TIM1_Compare2,
+    SysInterrupt_TIM1_Compare3,
+    SysInterrupt_TIM1_Compare4,
+    SysInterrupt_TIM2_IRQ,
+    SysInterrupt_TIM2_Compare1,
+    SysInterrupt_TIM2_Compare2,
+    SysInterrupt_TIM2_Compare3,
+    SysInterrupt_TIM2_Compare4,
+    SysInterrupt_TIM2_Update,
+    SysInterrupt_TIM2_Trigger,
+    SysInterrupt_TIM3_IRQ,
+    SysInterrupt_TIM3_Compare1,
+    SysInterrupt_TIM3_Compare2,
+    SysInterrupt_TIM3_Compare3,
+    SysInterrupt_TIM3_Compare4,
+    SysInterrupt_TIM3_Update,
+    SysInterrupt_TIM3_Trigger,
+    SysInterrupt_TIM4_IRQ,
+    SysInterrupt_TIM4_Compare1,
+    SysInterrupt_TIM4_Compare2,
+    SysInterrupt_TIM4_Compare3,
+    SysInterrupt_TIM4_Compare4,
+    SysInterrupt_TIM4_Update,
+    SysInterrupt_TIM4_Trigger,
+    __Last_irq = SysInterrupt_TIM4_Trigger+1
 
 
 #elif defined(STM32F2XX)
@@ -95,6 +115,7 @@ typedef enum hal_irq_t {
     SysInterrupt_TIM8_Compare1,
     SysInterrupt_TIM8_Compare2,
     SysInterrupt_TIM8_Compare3,
+    SysInterrupt_TIM8_Compare4,
     SysInterrupt_TIM1_TRG_COM_TIM11_IRQ,
     SysInterrupt_TIM1_Trigger,
     SysInterrupt_TIM1_COM,
@@ -105,7 +126,7 @@ typedef enum hal_irq_t {
     SysInterrupt_CAN2_RX0_IRQ,
     SysInterrupt_CAN2_RX1_IRQ,
     SysInterrupt_CAN2_SCE_IRQ,
-    __Last_irq = 45
+    __Last_irq = 46
 #else
     __Last_irq = 0
 #endif

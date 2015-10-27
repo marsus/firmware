@@ -27,7 +27,7 @@ CFLAGS += -DSPARK_NO_CLOUD
 endif
 
 ifeq ("$(SPARK_WIFI)","n")
-CFLAGS += -DSPARK_NO_WIFI
+CFLAGS += -DPARTICLE_NO_NETWORK
 endif
 
 
@@ -93,11 +93,6 @@ endif
 # TARGET_NAME is the final filename, including any prefix
 TARGET_NAME ?= $(TARGET_FILE_PREFIX)$(TARGET_FILE_NAME)
 TARGET_PATH ?= $(BUILD_PATH)/$(call sanitize,$(TARGET_DIR_NAME))
-
-# add trailing slash
-ifneq ("$(TARGET_PATH)","$(dir $(TARGET_PATH))")
-TARGET_SEP = /
-endif
 
 TARGET_BASE_DIR ?= $(TARGET_PATH)$(TARGET_SEP)
 TARGET_BASE ?= $(TARGET_BASE_DIR)$(TARGET_NAME)

@@ -7,6 +7,7 @@ SOURCE_PATH ?= $(MODULE_PATH)
 
 # Recursive wildcard function - finds matching files in a directory tree
 target_files = $(patsubst $(SOURCE_PATH)/%,%,$(call rwildcard,$(SOURCE_PATH)/$1,$2))
+here_files = $(call wildcard,$(SOURCE_PATH)/$1$2)
 
 # import this module's symbols
 include $(MODULE_PATH)/import.mk
@@ -19,6 +20,11 @@ include $(DEPS_INCLUDE_SCRIPTS)
 include $(COMMON_BUILD)/module-defaults.mk
 
 include $(call rwildcard,$(MODULE_PATH)/,build.mk)
+
+# add trailing slash
+ifneq ("$(TARGET_PATH)","$(dir $(TARGET_PATH))")
+TARGET_SEP = /
+endif
 
 TARGET_FILE_NAME ?= $(MODULE)
 

@@ -29,6 +29,24 @@
 #include "core_hal.h"
 #include "spark_wiring_version.h"
 #include "string_convert.h"
+#include "system_cloud_internal.h"
+
+#if MODULAR_FIRMWARE
+// The usual wiring implementations are dependent upon I2C, SPI and other global instances. Rewriting the GPIO functions to talk directly to the HAL
+
+void pinMode(pin_t pin, PinMode setMode) {
+    HAL_Pin_Mode(pin, setMode);
+}
+
+void digitalWrite(pin_t pin, uint8_t value) {
+    HAL_GPIO_Write(pin, value);
+}
+
+int32_t digitalRead(pin_t pin) {
+    return HAL_GPIO_Read(pin);
+}
+
+#endif
 
 #if PLATFORM_ID==4 || PLATFORM_ID==5 || PLATFORM_ID==6 || PLATFORM_ID==7 || PLATFORM_ID==8
 #define WIFI_SCAN 1
@@ -37,7 +55,7 @@
 #endif
 
 #if WIFI_SCAN
-#include "wlan_scan.h"
+#include "wlan_hal.h"
 #endif
 
 #if Wiring_WiFi
@@ -157,22 +175,22 @@ void WiFiTester::printInfo() {
 }
 
 #if WIFI_SCAN
-void wlan_scan_callback(void* data, const uint8_t* ssid, unsigned ssid_len, int rssi)
+void wlan_scan_callback(WiFiAccessPoint* ap, void* data)
 {
     WiFiTester& tester = *(WiFiTester*)data;
     char str_ssid[33];
-    memcpy(str_ssid, ssid, ssid_len);
-    str_ssid[ssid_len] = 0;
+    memcpy(str_ssid, ap->ssid, ap->ssidLength);
+    str_ssid[ap->ssidLength] = 0;
     tester.serialPrint(str_ssid);
     tester.serialPrint(",");
-    itoa(rssi, str_ssid, 10);
+    itoa(ap->rssi, str_ssid, 10);
     tester.serialPrintln(str_ssid);
 }
 
 void WiFiTester::wifiScan() {
     WiFi.on();
     serialPrintln("SCAN_START");
-    wlan_scan_aps(wlan_scan_callback, this);
+    wlan_scan(wlan_scan_callback, this);
     serialPrintln("SCAN_STOP");
 }
 #endif

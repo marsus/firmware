@@ -29,8 +29,10 @@
 
 // Constructors ////////////////////////////////////////////////////////////////
 
-TwoWire::TwoWire()
+TwoWire::TwoWire(HAL_I2C_Interface i2c)
 {
+  _i2c = i2c;
+  HAL_I2C_Init(_i2c, NULL);
 }
 
 // Public Methods //////////////////////////////////////////////////////////////
@@ -38,28 +40,28 @@ TwoWire::TwoWire()
 //setSpeed() should be called before begin() else default to 100KHz
 void TwoWire::setSpeed(uint32_t clockSpeed)
 {
-  HAL_I2C_Set_Speed(clockSpeed);
+  HAL_I2C_Set_Speed(_i2c, clockSpeed, NULL);
 }
 
 //enableDMAMode(true) should be called before begin() else default polling mode used
 void TwoWire::enableDMAMode(bool enableDMAMode)
 {
-  HAL_I2C_Enable_DMA_Mode(enableDMAMode);
+  HAL_I2C_Enable_DMA_Mode(_i2c, enableDMAMode, NULL);
 }
 
 void TwoWire::stretchClock(bool stretch)
 {
-  HAL_I2C_Stretch_Clock(stretch);
+  HAL_I2C_Stretch_Clock(_i2c, stretch, NULL);
 }
 
 void TwoWire::begin(void)
 {
-  HAL_I2C_Begin(I2C_MODE_MASTER, 0x00);
+  HAL_I2C_Begin(_i2c, I2C_MODE_MASTER, 0x00, NULL);
 }
 
 void TwoWire::begin(uint8_t address)
 {
-  HAL_I2C_Begin(I2C_MODE_SLAVE, address);
+  HAL_I2C_Begin(_i2c, I2C_MODE_SLAVE, address, NULL);
 }
 
 void TwoWire::begin(int address)
@@ -67,9 +69,14 @@ void TwoWire::begin(int address)
   begin((uint8_t)address);
 }
 
+void TwoWire::end()
+{
+    HAL_I2C_End(_i2c, NULL);
+}
+
 uint8_t TwoWire::requestFrom(uint8_t address, uint8_t quantity, uint8_t sendStop)
 {
-  return HAL_I2C_Request_Data(address, quantity, sendStop);
+  return HAL_I2C_Request_Data(_i2c, address, quantity, sendStop, NULL);
 }
 
 uint8_t TwoWire::requestFrom(uint8_t address, uint8_t quantity)
@@ -89,7 +96,7 @@ uint8_t TwoWire::requestFrom(int address, int quantity, int sendStop)
 
 void TwoWire::beginTransmission(uint8_t address)
 {
-  HAL_I2C_Begin_Transmission(address);
+  HAL_I2C_Begin_Transmission(_i2c, address, NULL);
 }
 
 void TwoWire::beginTransmission(int address)
@@ -112,7 +119,7 @@ void TwoWire::beginTransmission(int address)
 //
 uint8_t TwoWire::endTransmission(uint8_t sendStop)
 {
-  return HAL_I2C_End_Transmission(sendStop);
+  return HAL_I2C_End_Transmission(_i2c, sendStop, NULL);
 }
 
 //	This provides backwards compatibility with the original
@@ -128,7 +135,7 @@ uint8_t TwoWire::endTransmission(void)
 // or after beginTransmission(address)
 size_t TwoWire::write(uint8_t data)
 {
-  return HAL_I2C_Write_Data(data);
+  return HAL_I2C_Write_Data(_i2c, data, NULL);
 }
 
 // must be called in:
@@ -150,7 +157,7 @@ size_t TwoWire::write(const uint8_t *data, size_t quantity)
 // or after requestFrom(address, numBytes)
 int TwoWire::available(void)
 {
-  return HAL_I2C_Available_Data();
+  return HAL_I2C_Available_Data(_i2c, NULL);
 }
 
 // must be called in:
@@ -158,7 +165,7 @@ int TwoWire::available(void)
 // or after requestFrom(address, numBytes)
 int TwoWire::read(void)
 {
-  return HAL_I2C_Read_Data();
+  return HAL_I2C_Read_Data(_i2c, NULL);
 }
 
 // must be called in:
@@ -166,33 +173,68 @@ int TwoWire::read(void)
 // or after requestFrom(address, numBytes)
 int TwoWire::peek(void)
 {
-  return HAL_I2C_Peek_Data();
+  return HAL_I2C_Peek_Data(_i2c, NULL);
 }
 
 void TwoWire::flush(void)
 {
-  HAL_I2C_Flush_Data();
+  HAL_I2C_Flush_Data(_i2c, NULL);
 }
 
 // sets function called on slave write
 void TwoWire::onReceive( void (*function)(int) )
 {
-  HAL_I2C_Set_Callback_On_Receive(function);
+  HAL_I2C_Set_Callback_On_Receive(_i2c, function, NULL);
 }
 
 // sets function called on slave read
 void TwoWire::onRequest( void (*function)(void) )
 {
-  HAL_I2C_Set_Callback_On_Request(function);
+  HAL_I2C_Set_Callback_On_Request(_i2c, function, NULL);
 }
 
 bool TwoWire::isEnabled()
 {
-  return HAL_I2C_Is_Enabled();
+  return HAL_I2C_Is_Enabled(_i2c, NULL);
 }
 
-// Preinstantiate Objects //////////////////////////////////////////////////////
-#ifndef SPARK_WIRING_NO_I2C
-TwoWire Wire = TwoWire();
-#endif
+#include "gpio_hal.h"
+#include "spark_wiring_constants.h"
+#include "spark_wiring_ticks.h"
+void TwoWire::reset()
+{
+    pin_t _SCA;
+    pin_t _SCL;
 
+    if (_i2c==HAL_I2C_INTERFACE1)
+    {
+        _SCA = D0;
+        _SCL = D1;
+    }
+    else
+    {
+        return; // todo fill in other pins. The pins should ideally come from the HAL.
+    }
+
+    this->end();
+
+    HAL_Pin_Mode(_SCA, INPUT_PULLUP); //Turn SCA into high impedance input
+    HAL_Pin_Mode(_SCL, OUTPUT); //Turn SCL into a normal GPO
+    HAL_GPIO_Write(_SCL, HIGH); // Start idle HIGH
+
+    //Generate 9 pulses on SCL to tell slave to release the bus
+    for(int i=0; i <9; i++)
+    {
+        HAL_GPIO_Write(_SCL, LOW);
+        delayMicroseconds(100);
+        HAL_GPIO_Write(_SCL, HIGH);
+        delayMicroseconds(100);
+    }
+
+    //Change SCL to be an input
+    HAL_Pin_Mode(_SCL, INPUT_PULLUP);
+
+    //Start i2c over again
+    begin();
+    delay(50);
+}

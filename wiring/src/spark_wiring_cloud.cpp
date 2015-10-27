@@ -1,7 +1,5 @@
 #include "spark_wiring_cloud.h"
 
-CloudClass Spark;
-
 int CloudClass::call_raw_user_function(void* data, const char* param, void* reserved)
 {
     user_function_int_str_t* fn = (user_function_int_str_t*)(data);
@@ -13,6 +11,12 @@ int CloudClass::call_std_user_function(void* data, const char* param, void* rese
 {
     user_std_function_int_str_t* fn = (user_std_function_int_str_t*)(data);
     return (*fn)(String(param));
+}
+
+void CloudClass::call_wiring_event_handler(const void* handler_data, const char *event_name, const char *data)
+{
+    wiring_event_handler_t* fn = (wiring_event_handler_t*)(handler_data);
+    (*fn)(event_name, data);
 }
 
 bool CloudClass::register_function(cloud_function_t fn, void* data, const char* funcKey)
