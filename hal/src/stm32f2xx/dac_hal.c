@@ -56,6 +56,7 @@ static void HAL_DAC_Init()
     DAC_DeInit();
 
     /* DAC channel1 & channel2 Configuration */
+    DAC_StructInit(DAC_InitStruct);
     DAC_InitStructure.DAC_Trigger = DAC_Trigger_None;
     DAC_InitStructure.DAC_WaveGeneration = DAC_WaveGeneration_None;
     DAC_InitStructure.DAC_OutputBuffer = DAC_OutputBuffer_Enable;
@@ -68,9 +69,8 @@ static void HAL_DAC_Init()
     /* Enable DAC Channel2 */
     DAC_Cmd(DAC_Channel_2, ENABLE);
 
-    /* Start DAC conversion by software */
-    DAC_SoftwareTriggerCmd(DAC_Channel_1, ENABLE);
-    DAC_SoftwareTriggerCmd(DAC_Channel_2, ENABLE);
+    /* Enable DAC conversion by software */
+    DAC_DualSoftwareTriggerCmd(ENABLE);
 }
 
 /*
