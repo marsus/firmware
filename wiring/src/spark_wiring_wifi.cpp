@@ -30,6 +30,7 @@ License along with this library; if not, see <http://www.gnu.org/licenses/>.
 #include "system_tick_hal.h"
 #include <string.h>
 
+
 #if Wiring_WiFi
 
 namespace spark {
@@ -108,6 +109,17 @@ the same way.
 
     WiFiClass WiFi;
     NetworkClass& Network = WiFi;
-}
 
+  bool WiFiClass::startDNS(){
+    return wlan_start_dns() == 0;
+  }
+
+  bool WiFiClass::stopDNS(){
+    return wlan_stop_dns() == 0;
+  }
+
+  int WiFiClass::selectNetworkInterface(int iface){
+    return wlan_select_interface(iface);
+  }
+}
 #endif

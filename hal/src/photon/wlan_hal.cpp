@@ -37,6 +37,7 @@
 #include "wwd_sdpcm.h"
 #include "delay_hal.h"
 #include "dct_hal.h"
+#include "network_interface.h"
 
 // dns.h includes a class member, which doesn't compile in C++
 #define class clazz
@@ -137,6 +138,44 @@ int wlan_has_credentials()
     return !has_credentials;
 }
 
+extern "C" {
+  wiced_interface_t current_network_if = WICED_STA_INTERFACE;
+}
+int wlan_select_interface(int iface){
+  int result = current_network_if == WICED_AP_INTERFACE ? 1 : 0;
+  switch(iface){
+  case 0:
+    current_network_if = WICED_STA_INTERFACE;
+    break;
+  case 1:
+    current_network_if = WICED_AP_INTERFACE;
+    break;
+  case -1:
+    return result;
+  default:
+    return -1;
+  }
+  /*
+  // ensure our IP config is up to date
+  extern WLanConfig ip_config;
+  wlan_fetch_ipconfig(&ip_config);
+  */
+  return result;
+}
+
+static dns_redirector_t dns_redirector;
+bool wlan_start_dns(){
+  wiced_result_t result;
+  result = wiced_dns_redirector_start(&dns_redirector, WICED_AP_INTERFACE);
+  return result == WICED_SUCCESS;
+}
+
+bool wlan_stop_dns(){  
+  wiced_result_t result;
+  result = wiced_dns_redirector_stop(&dns_redirector);
+  return result == WICED_SUCCESS;
+}
+
 /**
  * Enable wlan and connect to a network.
  * @return
@@ -165,7 +204,7 @@ wlan_result_t wlan_connect_finalize()
     const static_ip_config_t& ip_config = *wlan_fetch_saved_ip_config();
 
     // enable connection from stored profiles
-    wlan_result_t result = wiced_interface_up(WICED_STA_INTERFACE);
+    wlan_result_t result = wiced_interface_up(current_network_if);
     if (!result) {
         HAL_WLAN_notify_connected();
         wiced_ip_setting_t settings;
@@ -176,7 +215,7 @@ wlan_result_t wlan_connect_finalize()
                 to_wiced_ip_address(settings.ip_address, ip_config.host);
                 to_wiced_ip_address(settings.netmask, ip_config.netmask);
                 to_wiced_ip_address(settings.gateway, ip_config.gateway);
-                result = wiced_network_up(WICED_STA_INTERFACE, WICED_USE_STATIC_IP, &settings);
+                result = wiced_network_up(current_network_if, WICED_USE_STATIC_IP, &settings);
                 if (!result) {
                     if (to_wiced_ip_address(dns, ip_config.dns1))
                         dns_client_add_server_address(dns);
@@ -184,13 +223,13 @@ wlan_result_t wlan_connect_finalize()
                         dns_client_add_server_address(dns);
                 }
             default:
-                result = wiced_network_up(WICED_STA_INTERFACE, WICED_USE_EXTERNAL_DHCP_SERVER, NULL);
+                result = wiced_network_up(current_network_if, WICED_USE_EXTERNAL_DHCP_SERVER, NULL);
                 break;
         }
     }
     else
     {
-        wiced_network_down(WICED_STA_INTERFACE);
+        wiced_network_down(current_network_if);
     }
     // DHCP happens synchronously
     HAL_WLAN_notify_dhcp(!result);
@@ -227,7 +266,7 @@ wlan_result_t wlan_activate()
 {
     wlan_result_t result = wiced_wlan_connectivity_init();
     if (!result)
-        wiced_network_register_link_callback(HAL_WLAN_notify_connected, HAL_WLAN_notify_disconnected, WICED_STA_INTERFACE);
+        wiced_network_register_link_callback(HAL_WLAN_notify_connected, HAL_WLAN_notify_disconnected, current_network_if);
     wlan_refresh_antenna();
     return result;
 }
@@ -241,7 +280,7 @@ wlan_result_t wlan_disconnect_now()
 {
     socket_close_all();
     wlan_connect_cancel(false);
-    wiced_result_t result = wiced_network_down(WICED_STA_INTERFACE);
+    wiced_result_t result = wiced_network_down(current_network_if);
     HAL_WLAN_notify_disconnected();
     return result;
 }
@@ -494,6 +533,12 @@ void wlan_smart_config_cleanup()
 
 void wlan_setup()
 {
+  /*
+    if (!wiced_wlan_connectivity_init()) {
+        wiced_network_register_link_callback(HAL_WLAN_notify_connected, HAL_WLAN_notify_disconnected, network);
+        //wiced_network_suspend();
+    }
+  */
 }
 
 void wlan_set_error_count(uint32_t errorCount)
@@ -507,7 +552,7 @@ inline void setAddress(wiced_ip_address_t* addr, HAL_IPAddress& target) {
 void wlan_fetch_ipconfig(WLanConfig* config)
 {
     wiced_ip_address_t addr;
-    wiced_interface_t ifup = WICED_STA_INTERFACE;
+    wiced_interface_t ifup = current_network_if;
 
     memset(config, 0, sizeof(*config));
     if (wiced_network_is_up(ifup)) {

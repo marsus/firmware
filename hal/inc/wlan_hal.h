@@ -80,6 +80,7 @@ typedef struct __attribute__((__packed__))  _WLanConfig_t {
 
 typedef int wlan_result_t;
 
+
 /**
  * Connect start the wireless connection.
  */
@@ -230,6 +231,23 @@ int wlan_select_antenna(WLanSelectAntenna_TypeDef antenna);
  * @param called_from_isr - set to true if this is being called from an ISR.
  */
 void wlan_connect_cancel(bool called_from_isr);
+
+/**
+ * Select which network interface to use.
+ * @param iface 0 for STA (default), 1 for AP (soft ap), -1 to simply return current network
+ * @return previous interface or -1 if change could not be actuated
+ */
+int wlan_select_interface(int iface);
+
+/**
+ * Start the access point DNS redirection service
+ */
+bool wlan_start_dns();
+
+/**
+ * Stop the access point DNS redirection service
+ */
+bool wlan_stop_dns();
 
 typedef enum {
     DYNAMIC_IP,

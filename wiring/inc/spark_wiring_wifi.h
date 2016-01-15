@@ -194,6 +194,28 @@ public:
         setIPAddressSource(DYNAMIC_IP);
     }
 
+  /**
+   * Select which network interface to use.
+   * @param iface 0 for STA (default), 1 for AP (soft ap), -1 to simply return current network
+   * @return previous interface or -1 if change could not be actuated
+   */
+  int selectNetworkInterface(int iface);
+
+  /**
+   * set access point configuration
+   */
+  bool configureAccessPoint(const char* ssid, const char* passwd, int channel);
+
+  /**
+   * Start a previously configured access point DNS redirector
+   */
+  bool startDNS();
+
+  /**
+   * Stop a running access point
+   */
+  bool stopDNS();
+
     int scan(wlan_scan_result_t callback, void* cookie=NULL) {
         return wlan_scan(callback, cookie);
     }

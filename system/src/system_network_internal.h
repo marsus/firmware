@@ -289,7 +289,8 @@ public:
             SPARK_WLAN_STARTED = 1;
             SPARK_WLAN_SLEEP = 0;
 
-            if (!has_credentials())
+	// hacked: allow connection (to AP) even if credentials are missing
+            if (false) // !has_credentials())
             {
                 if (listen_enabled) {
                     listen();
