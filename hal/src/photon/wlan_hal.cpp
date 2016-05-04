@@ -1,4 +1,4 @@
-**
+/**
  ******************************************************************************
  * @file    wlan_hal.c
  * @author  Matthew McGowan
@@ -295,7 +295,7 @@ wlan_result_t wlan_disconnect_now()
     socket_close_all();
     wlan_connect_cancel(false);
     wiced_result_t result = wiced_network_down(current_network_if);
-    HAL_WLAN_notify_disconnected();
+    HAL_NET_notify_disconnected();
     return result;
 }
 
