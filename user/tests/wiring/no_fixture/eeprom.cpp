@@ -46,8 +46,15 @@ test(EEPROM_ReadWriteSucceedsForAllAddressWithInRange) {
     // then
     for(address=0, data=data_seed; address < EEPROM_SIZE; address++, data++)
     {
-        assertEqual(EEPROM.read(address), data);
+        uint8_t data_read = EEPROM.read(address);
+        if (data_read!=data) {
+            assertEqual(EEPROM.read(address), data);
+        }
     }
+
+    // Avoid leaving the EEPROM 100% full which leads to poor performance
+    // in other programs using EEPROM on this device in the future
+    EEPROM.clear();
 }
 
 test(EEPROM_ReadWriteFailsForAnyAddressOutOfRange) {
@@ -74,6 +81,7 @@ test(EEPROM_PutGetSucceedsForCustomDataType) {
     // then
     EEPROMCustomObject getCustomData;
     EEPROM.get(0, getCustomData);
+    assertTrue(!memcmp(&putCustomData, &getCustomData, sizeof(EEPROMCustomObject)));
     assertEqual(putCustomData.fValue, getCustomData.fValue);
     assertEqual(putCustomData.bValue, getCustomData.bValue);
     assertEqual(strcmp(putCustomData.sValue, getCustomData.sValue), 0);
